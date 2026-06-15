@@ -43,3 +43,4 @@ class GuiParams:
         self.vertical_flip_flag: bool = False
         self.horizontal_flip_flag: bool = False
         self.rotate_name: str = DEFAULT_ROTATE_NAME
+        self.view_channel_mode: str = "RGBA"

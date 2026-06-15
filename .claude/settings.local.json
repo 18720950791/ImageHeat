@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/GUI/gui_params.py'', doraise=True\\); print\\(''gui_params.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/Image/constants.py'', doraise=True\\); print\\(''constants.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/Image/batch_processor.py'', doraise=True\\); print\\(''batch_processor.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/GUI/batch_export_dialog.py'', doraise=True\\); print\\(''batch_export_dialog.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/GUI/gui_main.py'', doraise=True\\); print\\(''gui_main.py OK''\\)\")",
+      "Bash(python -c \"import json; json.load\\(open\\(''src/data/lang/EN.json''\\)\\); print\\(''EN.json OK''\\)\")",
+      "Bash(pip install:*)"
+    ]
+  }
+}

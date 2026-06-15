@@ -37,6 +37,7 @@ from tkhtmlview import HTMLLabel
 from tkinterdnd2 import DND_FILES
 
 from src.GUI.about_window import AboutWindow
+from src.GUI.batch_export_dialog import BatchExportDialog
 from src.GUI.gui_params import GuiParams
 from src.GUI.gui_root import ImageHeatRoot
 from src.Image.constants import (
@@ -1016,6 +1017,13 @@ class ImageHeatGUI():
         master.bind_all("<Control-d>", lambda x: self.export_raw_file())
         self.filemenu.entryconfig(2, state="disabled")
 
+        self.filemenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_BATCH_EXPORT),
+            command=lambda: self.open_batch_export_dialog(),
+            accelerator="Ctrl+B",
+        )
+        master.bind_all("<Control-b>", lambda x: self.open_batch_export_dialog())
+
         self.filemenu.add_separator()
         self.filemenu.add_command(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT),
                                   command=lambda: self.quit_program(), accelerator="Ctrl+Q")
@@ -1200,7 +1208,9 @@ class ImageHeatGUI():
                                      label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_SAVE_AS))
         self.filemenu.entryconfigure(2, label=self.get_translation_text(
             TranslationKeys.TRANSLATION_TEXT_FILEMENU_SAVE_RAW_DATA))
-        self.filemenu.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT))
+        self.filemenu.entryconfigure(3, label=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_FILEMENU_BATCH_EXPORT))
+        self.filemenu.entryconfigure(5, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT))
         self.menubar.entryconfigure(1, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_FILE))
 
         self.optionsmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_LANGUAGE))
@@ -1688,6 +1698,14 @@ class ImageHeatGUI():
             logger.info("Image is not opened yet...")
 
         return True
+
+    def open_batch_export_dialog(self):
+        """Open the batch export dialog with current GUI parameters as the decode template."""
+        # Ensure no other toplevel windows are open
+        if any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
+            return
+        self.get_gui_params_from_gui_elements()
+        BatchExportDialog(self, self.gui_params)
 
     def show_about_window(self):
         if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
