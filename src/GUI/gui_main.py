@@ -13,7 +13,7 @@ import time
 import tkinter as tk
 from configparser import ConfigParser
 from idlelib.tooltip import Hovertip
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import List, Optional
 
 from PIL import Image, ImageDraw, ImageTk
@@ -38,6 +38,7 @@ from tkinterdnd2 import DND_FILES
 
 from src.GUI.about_window import AboutWindow
 from src.GUI.gui_params import GuiParams
+from src.GUI.gui_presets import PresetManager
 from src.GUI.gui_root import ImageHeatRoot
 from src.Image.constants import (
     COMPRESSION_TYPES_NAMES,
@@ -161,6 +162,10 @@ class ImageHeatGUI():
             self.current_open_palette_directory_path = ""
             self.current_program_language = tk.StringVar(value="EN")
             self.current_background_color = tk.StringVar(value="#595959")
+
+        # presets logic
+        self.presets_file_path: str = os.path.join(self.MAIN_DIRECTORY, "presets.json")
+        self.preset_manager: PresetManager = PresetManager(self.presets_file_path)
 
         ########################
         # MAIN FRAME           #
@@ -1075,6 +1080,29 @@ class ImageHeatGUI():
         self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP),
                                  menu=self.helpmenu)
 
+        # presets submenu
+        self.presetsmenu = tk.Menu(self.menubar, tearoff=0)
+        self.presetsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_NEW),
+            command=lambda: self.create_preset_dialog())
+        self.presetsmenu.add_separator()
+        self.preset_apply_menu = tk.Menu(self.presetsmenu, tearoff=0)
+        self.presetsmenu.add_cascade(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_APPLY),
+            menu=self.preset_apply_menu)
+        self.preset_rename_menu = tk.Menu(self.presetsmenu, tearoff=0)
+        self.presetsmenu.add_cascade(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_RENAME),
+            menu=self.preset_rename_menu)
+        self.preset_delete_menu = tk.Menu(self.presetsmenu, tearoff=0)
+        self.presetsmenu.add_cascade(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_DELETE),
+            menu=self.preset_delete_menu)
+        self.menubar.add_cascade(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_PRESETS),
+            menu=self.presetsmenu)
+        self._refresh_presets_menus()
+
         master.config(menu=self.menubar)
 
         ######################################################################################################
@@ -1220,6 +1248,13 @@ class ImageHeatGUI():
 
         self.helpmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT))
         self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
+
+        self.menubar.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_PRESETS))
+        self.presetsmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_NEW))
+        self.presetsmenu.entryconfigure(2, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_APPLY))
+        self.presetsmenu.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_RENAME))
+        self.presetsmenu.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_DELETE))
+        self._refresh_presets_menus()
 
         # save current language to config file
         self.user_config.set("config", ConfigKeys.CURRENT_PROGRAM_LANGUAGE, self.current_program_language.get())
@@ -2007,3 +2042,159 @@ class ImageHeatGUI():
                     self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_INFO_PIXEL_OFFSET), "n/a"))
                 self.infobox_pixel_value_hex_label.set_html(self._get_html_for_infobox_label(
                     self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_INFO_PIXEL_VALUE), "n/a"))
+
+    ######################################################################################################
+    #                                          presets logic                                             #
+    ######################################################################################################
+
+    def _capture_current_preset_dict(self) -> dict:
+        # snapshot of the current decoding/palette/post-processing parameters (file paths excluded
+        # so presets stay reusable across files)
+        return {
+            "pixel_format": self.pixel_format_combobox.get(),
+            "endianess_type": self.endianess_combobox.get(),
+            "swizzling_type": self.swizzling_combobox.get(),
+            "compression_type": self.compression_combobox.get(),
+            "img_width": self.get_spinbox_value(self.width_spinbox),
+            "img_height": self.get_spinbox_value(self.height_spinbox),
+            "img_start_offset": self.get_spinbox_value(self.img_start_offset_spinbox),
+            "img_end_offset": self.get_spinbox_value(self.img_end_offset_spinbox),
+            "palette_loadfrom_value": self.palette_load_from_variable.get(),
+            "palette_format": self.palette_format_combobox.get(),
+            "palette_offset": self.get_spinbox_value(self.palette_paloffset_spinbox),
+            "palette_scale_name": self.palette_palscale_combobox.get(),
+            "palette_endianess": self.palette_endianess_combobox.get(),
+            "palette_ps2_swizzle_flag": self.checkbox_value_to_bool(self.palette_ps2swizzle_variable.get()),
+            "zoom_name": self.postprocessing_zoom_combobox.get(),
+            "zoom_resampling_name": self.postprocessing_zoom_resampling_combobox.get(),
+            "vertical_flip_flag": self.checkbox_value_to_bool(self.postprocessing_vertical_flip_variable.get()),
+            "horizontal_flip_flag": self.checkbox_value_to_bool(self.postprocessing_horizontal_flip_variable.get()),
+            "rotate_name": self.postprocessing_rotate_combobox.get(),
+            "view_channel_mode": self.postprocessing_channel_var.get(),
+        }
+
+    def _apply_preset_dict(self, resolved: dict) -> None:
+        # image parameters
+        self.pixel_format_combobox.set(resolved["pixel_format"])
+        self.endianess_combobox.set(resolved["endianess_type"])
+        self.swizzling_combobox.set(resolved["swizzling_type"])
+        self.compression_combobox.set(resolved["compression_type"])
+        self.current_width.set(str(resolved["img_width"]))
+        self.current_height.set(str(resolved["img_height"]))
+        self.current_start_offset.set(str(resolved["img_start_offset"]))
+        self.current_end_offset.set(str(resolved["img_end_offset"]))
+
+        # palette parameters
+        self.palette_load_from_variable.set(resolved["palette_loadfrom_value"])
+        self.palette_format_combobox.set(resolved["palette_format"])
+        self.palette_current_paloffset.set(str(resolved["palette_offset"]))
+        self.palette_palscale_combobox.set(resolved["palette_scale_name"])
+        self.palette_endianess_combobox.set(resolved["palette_endianess"])
+        self.palette_ps2swizzle_variable.set("ON" if resolved["palette_ps2_swizzle_flag"] else "OFF")
+
+        # post-processing
+        self.postprocessing_zoom_combobox.set(resolved["zoom_name"])
+        self.postprocessing_zoom_resampling_combobox.set(resolved["zoom_resampling_name"])
+        self.postprocessing_vertical_flip_variable.set("ON" if resolved["vertical_flip_flag"] else "OFF")
+        self.postprocessing_horizontal_flip_variable.set("ON" if resolved["horizontal_flip_flag"] else "OFF")
+        self.postprocessing_rotate_combobox.set(resolved["rotate_name"])
+        self.postprocessing_channel_var.set(resolved["view_channel_mode"])
+
+    def _refresh_presets_menus(self) -> None:
+        preset_names = self.preset_manager.get_names()
+        no_presets_label = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETMENU_NO_PRESETS)
+        menus_and_handlers = (
+            (self.preset_apply_menu, self.apply_preset_by_name),
+            (self.preset_rename_menu, self.rename_preset_dialog),
+            (self.preset_delete_menu, self.delete_preset_by_name),
+        )
+        for submenu, handler in menus_and_handlers:
+            submenu.delete(0, "end")
+            if not preset_names:
+                submenu.add_command(label=no_presets_label, state="disabled")
+                continue
+            for preset_name in preset_names:
+                submenu.add_command(label=preset_name,
+                                    command=lambda name=preset_name, action=handler: action(name))
+
+    def create_preset_dialog(self) -> None:
+        title = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_NEW_TITLE)
+        new_name = simpledialog.askstring(
+            title, self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_NEW_PROMPT),
+            parent=self.master)
+        if new_name is None:
+            return  # user cancelled
+        new_name = new_name.strip()
+        if not new_name:
+            messagebox.showwarning(title, self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PRESET_EMPTY_NAME), parent=self.master)
+            return
+        if self.preset_manager.exists(new_name):
+            overwrite_prompt = self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PRESET_OVERWRITE_CONFIRM).format(name=new_name)
+            if not messagebox.askyesno(title, overwrite_prompt, parent=self.master):
+                return
+
+        self.preset_manager.create(new_name, self._capture_current_preset_dict())
+        self._refresh_presets_menus()
+        messagebox.showinfo(title, self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PRESET_SAVED), parent=self.master)
+        logger.info(f"Preset '{new_name}' saved successfully")
+
+    def apply_preset_by_name(self, preset_name: str) -> None:
+        preset = self.preset_manager.get(preset_name)
+        if preset is None:
+            messagebox.showerror(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_APPLY_ERROR_TITLE),
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_NOT_FOUND), parent=self.master)
+            return
+
+        current_values = self._capture_current_preset_dict()
+        resolved, errors = self.preset_manager.validate_and_resolve(preset, current_values)
+        if errors:
+            # invalid preset must not overwrite the current valid parameters
+            header = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_APPLY_ERROR_HEADER)
+            details = "\n".join("\u2022 " + error_message for error_message in errors)
+            messagebox.showerror(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_APPLY_ERROR_TITLE),
+                header + "\n" + details, parent=self.master)
+            logger.warning(f"Preset '{preset_name}' was not applied due to validation errors: {errors}")
+            return
+
+        self._apply_preset_dict(resolved)
+        self.parameters_box_disable_enable_logic()
+        self.gui_reload_image_on_gui_element_change()
+        logger.info(f"Preset '{preset_name}' applied successfully")
+
+    def rename_preset_dialog(self, old_name: str) -> None:
+        title = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_RENAME_TITLE)
+        new_name = simpledialog.askstring(
+            title, self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_RENAME_PROMPT),
+            initialvalue=old_name, parent=self.master)
+        if new_name is None:
+            return  # user cancelled
+        new_name = new_name.strip()
+        if not new_name:
+            messagebox.showwarning(title, self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PRESET_EMPTY_NAME), parent=self.master)
+            return
+        if new_name == old_name:
+            return
+        if self.preset_manager.exists(new_name):
+            messagebox.showwarning(title, self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PRESET_NAME_EXISTS), parent=self.master)
+            return
+
+        self.preset_manager.rename(old_name, new_name)
+        self._refresh_presets_menus()
+        logger.info(f"Preset '{old_name}' renamed to '{new_name}'")
+
+    def delete_preset_by_name(self, preset_name: str) -> None:
+        title = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_DELETE_TITLE)
+        confirm_prompt = self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PRESET_DELETE_CONFIRM).format(name=preset_name)
+        if not messagebox.askyesno(title, confirm_prompt, parent=self.master):
+            return
+        self.preset_manager.delete(preset_name)
+        self._refresh_presets_menus()
+        logger.info(f"Preset '{preset_name}' deleted")

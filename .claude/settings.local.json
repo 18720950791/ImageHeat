@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l src/GUI/*.py src/Image/*.py src/main.py)",
+      "Bash(python -m py_compile src/GUI/gui_presets.py src/GUI/gui_main.py src/Image/constants.py)",
+      "Bash(python _preset_smoketest.py)",
+      "Bash(status=$?)",
+      "Bash(rm -f _preset_smoketest.py)",
+      "Bash(exit $status)",
+      "Bash(python -c \"import src.GUI.gui_main as m; print\\(''IMPORT_OK'', hasattr\\(m.ImageHeatGUI, ''apply_preset_by_name''\\), hasattr\\(m.ImageHeatGUI, ''_capture_current_preset_dict''\\)\\)\")",
+      "Bash(cd:*)"
+    ]
+  }
+}

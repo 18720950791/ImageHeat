@@ -424,6 +424,26 @@ class TranslationKeys(str, Enum):
     TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE = "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE"
     TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD = "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD"
 
+    TRANSLATION_TEXT_PRESETMENU_PRESETS = "TRANSLATION_TEXT_PRESETMENU_PRESETS"
+    TRANSLATION_TEXT_PRESETMENU_NEW = "TRANSLATION_TEXT_PRESETMENU_NEW"
+    TRANSLATION_TEXT_PRESETMENU_APPLY = "TRANSLATION_TEXT_PRESETMENU_APPLY"
+    TRANSLATION_TEXT_PRESETMENU_RENAME = "TRANSLATION_TEXT_PRESETMENU_RENAME"
+    TRANSLATION_TEXT_PRESETMENU_DELETE = "TRANSLATION_TEXT_PRESETMENU_DELETE"
+    TRANSLATION_TEXT_PRESETMENU_NO_PRESETS = "TRANSLATION_TEXT_PRESETMENU_NO_PRESETS"
+    TRANSLATION_TEXT_PRESET_NEW_TITLE = "TRANSLATION_TEXT_PRESET_NEW_TITLE"
+    TRANSLATION_TEXT_PRESET_NEW_PROMPT = "TRANSLATION_TEXT_PRESET_NEW_PROMPT"
+    TRANSLATION_TEXT_PRESET_RENAME_TITLE = "TRANSLATION_TEXT_PRESET_RENAME_TITLE"
+    TRANSLATION_TEXT_PRESET_RENAME_PROMPT = "TRANSLATION_TEXT_PRESET_RENAME_PROMPT"
+    TRANSLATION_TEXT_PRESET_DELETE_TITLE = "TRANSLATION_TEXT_PRESET_DELETE_TITLE"
+    TRANSLATION_TEXT_PRESET_DELETE_CONFIRM = "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM"
+    TRANSLATION_TEXT_PRESET_EMPTY_NAME = "TRANSLATION_TEXT_PRESET_EMPTY_NAME"
+    TRANSLATION_TEXT_PRESET_NAME_EXISTS = "TRANSLATION_TEXT_PRESET_NAME_EXISTS"
+    TRANSLATION_TEXT_PRESET_OVERWRITE_CONFIRM = "TRANSLATION_TEXT_PRESET_OVERWRITE_CONFIRM"
+    TRANSLATION_TEXT_PRESET_SAVED = "TRANSLATION_TEXT_PRESET_SAVED"
+    TRANSLATION_TEXT_PRESET_NOT_FOUND = "TRANSLATION_TEXT_PRESET_NOT_FOUND"
+    TRANSLATION_TEXT_PRESET_APPLY_ERROR_TITLE = "TRANSLATION_TEXT_PRESET_APPLY_ERROR_TITLE"
+    TRANSLATION_TEXT_PRESET_APPLY_ERROR_HEADER = "TRANSLATION_TEXT_PRESET_APPLY_ERROR_HEADER"
+
 
 @dataclass
 class TranslationEntry:
@@ -545,5 +565,42 @@ TRANSLATION_MEMORY: List[TranslationEntry] = [
     TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE, default="White"),
     TranslationEntry(
         id=TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD, default="Checkerboard (Alpha)"
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_PRESETS, default="Presets"),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_NEW, default="New Preset..."),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_APPLY, default="Apply"),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_RENAME, default="Rename"),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_DELETE, default="Delete"),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESETMENU_NO_PRESETS, default="(no presets)"),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_NEW_TITLE, default="New Preset"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_NEW_PROMPT, default="Enter a name for the new preset:"
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_RENAME_TITLE, default="Rename Preset"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_RENAME_PROMPT, default="Enter a new name for the preset:"
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_DELETE_TITLE, default="Delete Preset"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_DELETE_CONFIRM,
+        default="Are you sure you want to delete preset '{name}'?",
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_EMPTY_NAME, default="Preset name cannot be empty!"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_NAME_EXISTS, default="A preset with this name already exists!"
+    ),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_OVERWRITE_CONFIRM,
+        default="A preset named '{name}' already exists. Overwrite it?",
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_SAVED, default="Preset saved successfully!"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_NOT_FOUND, default="Selected preset could not be found!"
+    ),
+    TranslationEntry(id=TranslationKeys.TRANSLATION_TEXT_PRESET_APPLY_ERROR_TITLE, default="Invalid Preset"),
+    TranslationEntry(
+        id=TranslationKeys.TRANSLATION_TEXT_PRESET_APPLY_ERROR_HEADER,
+        default="The selected preset is invalid and was not applied. "
+        "Current parameters were left unchanged.\n\nDetails:",
     ),
 ]
