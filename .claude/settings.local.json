@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/Image/preset_manager.py'', doraise=True\\); print\\(''preset_manager.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/GUI/preset_dialog.py'', doraise=True\\); print\\(''preset_dialog.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/GUI/gui_main.py'', doraise=True\\); print\\(''gui_main.py OK''\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''src/Image/constants.py'', doraise=True\\); print\\(''constants.py OK''\\)\")",
+      "Bash(python -c \"import json; [json.load\\(open\\(f''src/data/lang/{lang}.json'', encoding=''utf-8''\\)\\) for lang in [''EN'',''ZH'',''PL'',''ES'',''PTBR'',''SL'',''UA'']]; print\\(''All JSON files valid''\\)\")"
+    ]
+  }
+}

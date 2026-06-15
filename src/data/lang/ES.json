@@ -120,6 +120,32 @@
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_GRAY": "Gris (por defecto)",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_BLACK": "Negro",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE": "Blanco",
-    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Ajedrez (Alpha)"
+    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Ajedrez (Alpha)",
+
+    "TRANSLATION_TEXT_PRESETSMENU_PRESETS": "Preajustes",
+    "TRANSLATION_TEXT_PRESETSMENU_SAVE_PRESET": "Guardar Preajuste...",
+    "TRANSLATION_TEXT_PRESETSMENU_LOAD_PRESET": "Cargar Preajuste...",
+    "TRANSLATION_TEXT_PRESETSMENU_MANAGE_PRESETS": "Administrar Preajustes...",
+    "TRANSLATION_TEXT_PRESET_DIALOG_TITLE": "Administrador de Preajustes",
+    "TRANSLATION_TEXT_PRESET_DIALOG_APPLY": "Aplicar",
+    "TRANSLATION_TEXT_PRESET_DIALOG_RENAME": "Renombrar",
+    "TRANSLATION_TEXT_PRESET_DIALOG_DELETE": "Eliminar",
+    "TRANSLATION_TEXT_PRESET_DIALOG_CLOSE": "Cerrar",
+    "TRANSLATION_TEXT_PRESET_DIALOG_PREVIEW": "Vista previa",
+    "TRANSLATION_TEXT_PRESET_SAVE_TITLE": "Guardar Preajuste",
+    "TRANSLATION_TEXT_PRESET_SAVE_PROMPT": "Ingrese el nombre del preajuste:",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_TITLE": "Sobrescribir Preajuste",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_MSG": "El preajuste ya existe. ¿Sobrescribir?",
+    "TRANSLATION_TEXT_PRESET_SAVE_SUCCESS": "¡Preajuste guardado con éxito!",
+    "TRANSLATION_TEXT_PRESET_RENAME_TITLE": "Renombrar Preajuste",
+    "TRANSLATION_TEXT_PRESET_RENAME_PROMPT": "Ingrese el nuevo nombre:",
+    "TRANSLATION_TEXT_PRESET_ERROR_TITLE": "Error de Preajuste",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID": "¡Preajuste inválido! Los siguientes campos tienen errores:",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_TITLE": "Eliminar Preajuste",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_MSG": "¿Eliminar preajuste? Esta acción no se puede deshacer.",
+    "TRANSLATION_TEXT_PRESET_NO_SELECTION": "Por favor seleccione un preajuste primero.",
+    "TRANSLATION_TEXT_PRESET_WARNINGS_TITLE": "Advertencias de Preajuste",
+    "TRANSLATION_TEXT_PRESET_ERROR_NAME_EXISTS": "Ya existe un preajuste con este nombre.",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID_NAME": "Nombre de preajuste inválido. Use un nombre diferente."
   }
 }

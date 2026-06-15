@@ -13,7 +13,7 @@ import time
 import tkinter as tk
 from configparser import ConfigParser
 from idlelib.tooltip import Hovertip
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import List, Optional
 
 from PIL import Image, ImageDraw, ImageTk
@@ -39,6 +39,7 @@ from tkinterdnd2 import DND_FILES
 from src.GUI.about_window import AboutWindow
 from src.GUI.gui_params import GuiParams
 from src.GUI.gui_root import ImageHeatRoot
+from src.GUI.preset_dialog import PresetManagerDialog
 from src.Image.constants import (
     COMPRESSION_TYPES_NAMES,
     DEFAULT_COMPRESSION_NAME,
@@ -56,6 +57,7 @@ from src.Image.constants import (
     PALETTE_SCALE_TYPES_NAMES,
     PIXEL_FORMATS_NAMES,
     ROTATE_TYPES_NAMES,
+    SUPPORTED_PALETTE_SCALE_TYPES,
     SWIZZLING_TYPES_NAMES,
     TRANSLATION_MEMORY,
     ZOOM_RESAMPLING_TYPES_NAMES,
@@ -70,6 +72,7 @@ from src.Image.constants import (
     get_zoom_value,
 )
 from src.Image.heatimage import HeatImage
+from src.Image.preset_manager import PresetError, PresetManager
 
 # default app settings
 WINDOW_HEIGHT = 600
@@ -113,6 +116,11 @@ class ImageHeatGUI():
         self.pixel_value_str: str = ""
         self.pixel_value_rgba: bytearray = bytearray(10)
         self._debounce_timer = None
+
+        # preset manager
+        self.preset_manager = PresetManager(
+            os.path.join(self.MAIN_DIRECTORY, "data", "presets")
+        )
 
         # drag and drop logic
         self.master.drop_target_register(DND_FILES)
@@ -1067,6 +1075,30 @@ class ImageHeatGUI():
         self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_OPTIONS),
                                  menu=self.optionsmenu)
 
+        # presets submenu
+        self.presetsmenu = tk.Menu(self.menubar, tearoff=0)
+        self.presetsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_SAVE_PRESET),
+            command=lambda: self.save_preset_action(),
+            accelerator="Ctrl+P",
+        )
+        master.bind_all("<Control-p>", lambda x: self.save_preset_action())
+        self.presetsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_LOAD_PRESET),
+            command=lambda: self.show_preset_dialog(),
+            accelerator="Ctrl+L",
+        )
+        master.bind_all("<Control-l>", lambda x: self.show_preset_dialog())
+        self.presetsmenu.add_separator()
+        self.presetsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_MANAGE_PRESETS),
+            command=lambda: self.show_preset_dialog(),
+        )
+        self.menubar.add_cascade(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_PRESETS),
+            menu=self.presetsmenu,
+        )
+
         # help submenu
         self.helpmenu = tk.Menu(self.menubar, tearoff=0)
         self.helpmenu.add_command(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT),
@@ -1218,8 +1250,16 @@ class ImageHeatGUI():
         self.backgroundmenu.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD))
         self.menubar.entryconfigure(2, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_OPTIONS))
 
+        self.presetsmenu.entryconfigure(0, label=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_SAVE_PRESET))
+        self.presetsmenu.entryconfigure(1, label=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_LOAD_PRESET))
+        self.presetsmenu.entryconfigure(3, label=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_MANAGE_PRESETS))
+        self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESETSMENU_PRESETS))
+
         self.helpmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT))
-        self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
+        self.menubar.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
 
         # save current language to config file
         self.user_config.set("config", ConfigKeys.CURRENT_PROGRAM_LANGUAGE, self.current_program_language.get())
@@ -1692,6 +1732,90 @@ class ImageHeatGUI():
     def show_about_window(self):
         if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
             AboutWindow(self)
+
+    def save_preset_action(self):
+        preset_name = simpledialog.askstring(
+            self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_TITLE),
+            self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_PROMPT),
+            parent=self.master,
+        )
+        if not preset_name or not preset_name.strip():
+            return
+
+        sanitized = self.preset_manager.sanitize_filename(preset_name.strip())
+        if not sanitized:
+            messagebox.showerror(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_ERROR_TITLE),
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_ERROR_INVALID_NAME),
+                parent=self.master,
+            )
+            return
+
+        if self.preset_manager.preset_exists(sanitized):
+            overwrite = messagebox.askyesno(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_TITLE),
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_MSG),
+                parent=self.master,
+            )
+            if not overwrite:
+                return
+
+        try:
+            self.get_gui_params_from_gui_elements()
+            self.preset_manager.save_preset(sanitized, self.gui_params)
+            messagebox.showinfo(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_TITLE),
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_SAVE_SUCCESS),
+                parent=self.master,
+            )
+        except PresetError as error:
+            messagebox.showerror(
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PRESET_ERROR_TITLE),
+                str(error),
+                parent=self.master,
+            )
+
+    def show_preset_dialog(self):
+        if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
+            PresetManagerDialog(self, self.preset_manager)
+
+    def _apply_preset_to_gui(self, preset_data: dict):
+        """Write resolved preset values into GUI widgets and trigger image reload."""
+        img = preset_data.get("image", {})
+        pal = preset_data.get("palette", {})
+
+        # Image parameters
+        self.pixel_format_combobox.set(img.get("pixel_format", DEFAULT_PIXEL_FORMAT_NAME))
+        self.endianess_combobox.set(img.get("endianess_type", DEFAULT_ENDIANESS_NAME))
+        self.swizzling_combobox.set(img.get("swizzling_type", DEFAULT_SWIZZLING_NAME))
+        self.compression_combobox.set(img.get("compression_type", DEFAULT_COMPRESSION_NAME))
+        self.current_start_offset.set(str(img.get("img_start_offset", 0)))
+        self.current_end_offset.set(str(img.get("img_end_offset", 0)))
+        self.current_width.set(str(img.get("img_width", 1)))
+        self.current_height.set(str(img.get("img_height", 1)))
+
+        # Palette parameters
+        self.palette_format_combobox.set(pal.get("palette_format", DEFAULT_PALETTE_FORMAT_NAME))
+        self.palette_current_paloffset.set(str(pal.get("palette_offset", 0)))
+
+        # Reverse-map scale_value int to display name for combobox
+        scale_value = pal.get("palette_scale_value", 1)
+        scale_display = DEFAULT_PALETTE_SCALE_NAME
+        for scale_type in SUPPORTED_PALETTE_SCALE_TYPES:
+            if scale_type.scale_value == scale_value:
+                scale_display = scale_type.display_name
+                break
+        self.palette_palscale_combobox.set(scale_display)
+
+        self.palette_endianess_combobox.set(pal.get("palette_endianess", DEFAULT_ENDIANESS_NAME))
+        if pal.get("palette_ps2_swizzle_flag", False):
+            self.palette_ps2swizzle_variable.set("ON")
+        else:
+            self.palette_ps2swizzle_variable.set("OFF")
+
+        # Trigger reload
+        self.parameters_box_disable_enable_logic()
+        self.gui_reload_image_on_gui_element_change()
 
     @staticmethod
     def set_text_in_box(in_box, in_text):

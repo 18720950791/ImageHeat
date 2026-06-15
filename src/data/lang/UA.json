@@ -120,6 +120,32 @@
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_GRAY": "Сірий (За замовчуванням)",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_BLACK": "Чорний",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE": "Білий",
-    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Шахівниця (прозорий)"
+    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Шахівниця (прозорий)",
+
+    "TRANSLATION_TEXT_PRESETSMENU_PRESETS": "Пресети",
+    "TRANSLATION_TEXT_PRESETSMENU_SAVE_PRESET": "Зберегти пресет...",
+    "TRANSLATION_TEXT_PRESETSMENU_LOAD_PRESET": "Завантажити пресет...",
+    "TRANSLATION_TEXT_PRESETSMENU_MANAGE_PRESETS": "Керувати пресетами...",
+    "TRANSLATION_TEXT_PRESET_DIALOG_TITLE": "Менеджер пресетів",
+    "TRANSLATION_TEXT_PRESET_DIALOG_APPLY": "Застосувати",
+    "TRANSLATION_TEXT_PRESET_DIALOG_RENAME": "Перейменувати",
+    "TRANSLATION_TEXT_PRESET_DIALOG_DELETE": "Видалити",
+    "TRANSLATION_TEXT_PRESET_DIALOG_CLOSE": "Закрити",
+    "TRANSLATION_TEXT_PRESET_DIALOG_PREVIEW": "Попередній перегляд",
+    "TRANSLATION_TEXT_PRESET_SAVE_TITLE": "Зберегти пресет",
+    "TRANSLATION_TEXT_PRESET_SAVE_PROMPT": "Введіть назву пресету:",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_TITLE": "Перезаписати пресет",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_MSG": "Пресет вже існує. Перезаписати?",
+    "TRANSLATION_TEXT_PRESET_SAVE_SUCCESS": "Пресет успішно збережено!",
+    "TRANSLATION_TEXT_PRESET_RENAME_TITLE": "Перейменувати пресет",
+    "TRANSLATION_TEXT_PRESET_RENAME_PROMPT": "Введіть нову назву:",
+    "TRANSLATION_TEXT_PRESET_ERROR_TITLE": "Помилка пресету",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID": "Недійсний пресет! Наступні поля містять помилки:",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_TITLE": "Видалити пресет",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_MSG": "Видалити пресет? Цю дію неможливо скасувати.",
+    "TRANSLATION_TEXT_PRESET_NO_SELECTION": "Спочатку виберіть пресет.",
+    "TRANSLATION_TEXT_PRESET_WARNINGS_TITLE": "Попередження пресету",
+    "TRANSLATION_TEXT_PRESET_ERROR_NAME_EXISTS": "Пресет із такою назвою вже існує.",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID_NAME": "Недійсна назва пресету. Використовуйте іншу назву."
   }
 }

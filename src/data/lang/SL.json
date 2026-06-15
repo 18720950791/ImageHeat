@@ -120,6 +120,32 @@
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_GRAY": "Siva (privzeto)",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_BLACK": "Črna",
     "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_WHITE": "Bela",
-    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Šahovnica (Alfa)"
+    "TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD": "Šahovnica (Alfa)",
+
+    "TRANSLATION_TEXT_PRESETSMENU_PRESETS": "Prednastavitve",
+    "TRANSLATION_TEXT_PRESETSMENU_SAVE_PRESET": "Shrani prednastavitev...",
+    "TRANSLATION_TEXT_PRESETSMENU_LOAD_PRESET": "Naloži prednastavitev...",
+    "TRANSLATION_TEXT_PRESETSMENU_MANAGE_PRESETS": "Upravljaj prednastavitve...",
+    "TRANSLATION_TEXT_PRESET_DIALOG_TITLE": "Upravitelj prednastavitev",
+    "TRANSLATION_TEXT_PRESET_DIALOG_APPLY": "Uporabi",
+    "TRANSLATION_TEXT_PRESET_DIALOG_RENAME": "Preimenuj",
+    "TRANSLATION_TEXT_PRESET_DIALOG_DELETE": "Izbriši",
+    "TRANSLATION_TEXT_PRESET_DIALOG_CLOSE": "Zapri",
+    "TRANSLATION_TEXT_PRESET_DIALOG_PREVIEW": "Predogled",
+    "TRANSLATION_TEXT_PRESET_SAVE_TITLE": "Shrani prednastavitev",
+    "TRANSLATION_TEXT_PRESET_SAVE_PROMPT": "Vnesite ime prednastavitve:",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_TITLE": "Prepiši prednastavitev",
+    "TRANSLATION_TEXT_PRESET_SAVE_OVERWRITE_MSG": "Prednastavitev že obstaja. Jo prepišem?",
+    "TRANSLATION_TEXT_PRESET_SAVE_SUCCESS": "Prednastavitev uspešno shranjena!",
+    "TRANSLATION_TEXT_PRESET_RENAME_TITLE": "Preimenuj prednastavitev",
+    "TRANSLATION_TEXT_PRESET_RENAME_PROMPT": "Vnesite novo ime:",
+    "TRANSLATION_TEXT_PRESET_ERROR_TITLE": "Napaka prednastavitve",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID": "Neveljavna prednastavitev! Naslednja polja imajo napake:",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_TITLE": "Izbriši prednastavitev",
+    "TRANSLATION_TEXT_PRESET_DELETE_CONFIRM_MSG": "Izbrišem prednastavitev? Tega ni mogoče razveljaviti.",
+    "TRANSLATION_TEXT_PRESET_NO_SELECTION": "Najprej izberite prednastavitev.",
+    "TRANSLATION_TEXT_PRESET_WARNINGS_TITLE": "Opozorila prednastavitve",
+    "TRANSLATION_TEXT_PRESET_ERROR_NAME_EXISTS": "Prednastavitev s tem imenom že obstaja.",
+    "TRANSLATION_TEXT_PRESET_ERROR_INVALID_NAME": "Neveljavno ime prednastavitve. Uporabite drugo ime."
   }
 }
