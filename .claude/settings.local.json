@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import json; json.load\\(open\\(''src/data/lang/ZH.json'',encoding=''utf8''\\)\\); json.load\\(open\\(''src/data/lang/EN.json'',encoding=''utf8''\\)\\); print\\(''JSON OK''\\)\")",
+      "Bash(python -m py_compile src/GUI/gui_main.py src/Image/constants.py)",
+      "Bash(python -:*)",
+      "Bash(python -m flake8 --version)"
+    ]
+  }
+}

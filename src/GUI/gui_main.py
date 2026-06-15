@@ -3,6 +3,7 @@ Copyright © 2024-2025  Bartłomiej Duda
 License: GPL-3.0 License
 """
 
+import csv
 import json
 import math
 import os
@@ -113,6 +114,16 @@ class ImageHeatGUI():
         self.pixel_value_str: str = ""
         self.pixel_value_rgba: bytearray = bytearray(10)
         self._debounce_timer = None
+
+        # pixel probe state
+        self.preview_zoom_value: float = 1.0
+        self.pixel_probes: List[dict] = []
+        self._probe_id_counter: int = 0
+        self._probes_decode_signature = None
+        self.probe_window: Optional[tk.Toplevel] = None
+        self.probe_tree: Optional[ttk.Treeview] = None
+        self.probe_count_label = None
+        self.probe_hint_label = None
 
         # drag and drop logic
         self.master.drop_target_register(DND_FILES)
@@ -985,6 +996,8 @@ class ImageHeatGUI():
 
         # bind mouse wheel to scroll
         self.preview_instance.bind('<Motion>', self._mouse_motion_handler)
+        # bind left-click to add a pixel probe
+        self.preview_instance.bind('<Button-1>', self.add_pixel_probe)
 
         ###############################################################################################################
         ############ menu
@@ -1074,6 +1087,25 @@ class ImageHeatGUI():
         master.bind_all("<Control-h>", lambda x: self.show_about_window())
         self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP),
                                  menu=self.helpmenu)
+
+        # pixel probes submenu
+        self.probesmenu = tk.Menu(self.menubar, tearoff=0)
+        self.probesmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_SHOW_LIST),
+            command=lambda: self.open_probe_window(),
+            accelerator=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_SHORTCUT_SHOW_LIST),
+        )
+        master.bind_all("<Control-b>", lambda x: self.open_probe_window())
+        self.probesmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_EXPORT_CSV_MENU),
+            command=lambda: self.export_probes_to_csv(),
+        )
+        self.probesmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_CLEAR_ALL),
+            command=lambda: self.clear_pixel_probes(),
+        )
+        self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_MENU),
+                                 menu=self.probesmenu)
 
         master.config(menu=self.menubar)
 
@@ -1220,6 +1252,12 @@ class ImageHeatGUI():
 
         self.helpmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT))
         self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
+
+        self.probesmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_SHOW_LIST))
+        self.probesmenu.entryconfigure(1, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_EXPORT_CSV_MENU))
+        self.probesmenu.entryconfigure(2, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_CLEAR_ALL))
+        self.menubar.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_MENU))
+        self._translate_probe_window()
 
         # save current language to config file
         self.user_config.set("config", ConfigKeys.CURRENT_PROGRAM_LANGUAGE, self.current_program_language.get())
@@ -1499,6 +1537,9 @@ class ImageHeatGUI():
 
         logger.info(f"Loading file {in_file_name}...")
 
+        # any probes from a previously opened file are stale now
+        self.clear_pixel_probes()
+
         # gui params logic
         self.gui_params.img_file_path = in_file_path
         self.gui_params.img_file_name = in_file_name
@@ -1754,6 +1795,9 @@ class ImageHeatGUI():
         self.preview_instance.delete("all")
         # canvas image must be kept as instance variable to prevent garbage collection
 
+        # decoding failed: any existing probes point at data that is no longer shown
+        self.clear_pixel_probes()
+
         self.ph_img = ImageTk.PhotoImage(pil_img)
 
         # drawing rectangle as background
@@ -1924,6 +1968,10 @@ class ImageHeatGUI():
             # setting scroll region to image size
             self.preview_instance.configure(scrollregion=(0, 0, width, height))
 
+            # refresh pixel probes: drop stale ones on re-decode, then redraw markers on top
+            self._sync_probes_with_decode()
+            self._redraw_pixel_probes()
+
             execution_time = time.time() - start_time
             logger.info(f"[PREVIEW] Image preview for pixel_format={self.gui_params.pixel_format}"
                         f" finished successfully. Time: {round(execution_time, 2)} seconds.")
@@ -1939,46 +1987,18 @@ class ImageHeatGUI():
         # getting params
         image_format: ImageFormats = ImageFormats[self.gui_params.pixel_format]
         compression_id: str = get_compression_id(self.gui_params.compression_type)
-        m_rotate_id = get_rotate_id(self.gui_params.rotate_name)
         bpp: int = get_bpp_for_image_format(image_format)
         bytes_per_pixel: float = convert_bpp_to_bytes_per_pixel_float(bpp)
 
-        # post-processing logic
+        # post-processing logic (shared, transform-correct canvas->source mapping)
         canvas_x = self.preview_instance.canvasx(event.x)
         canvas_y = self.preview_instance.canvasy(event.y)
 
-        x = int(math.ceil((canvas_x + 1) / self.preview_zoom_value))
-        y = int(math.ceil((canvas_y + 1) / self.preview_zoom_value))
-
-        if self.gui_params.vertical_flip_flag:
-            y = self.gui_params.img_height - y + 1
-        if self.gui_params.horizontal_flip_flag:
-            x = self.gui_params.img_width - x + 1
-
-        if m_rotate_id == "none":
-            pass
-        elif m_rotate_id == "rotate_90_left":
-            temp_x = x
-            x = self.gui_params.img_width - y + 1
-            y = temp_x
-        elif m_rotate_id == "rotate_90_right":
-            temp_x = x
-            x = y
-            y = self.gui_params.img_height - temp_x + 1
-        elif m_rotate_id == "rotate_180":
-            x = self.gui_params.img_width - x + 1
-            y = self.gui_params.img_height - y + 1
-        else:
-            logger.warning(f"Not supported rotate type selected! Rotate_id: {m_rotate_id}")
-
-        self.pixel_x = x
-        self.pixel_y = y
-
-        if (self.pixel_x > self.gui_params.img_width
-                or self.pixel_y > self.gui_params.img_height
-                or self.pixel_x < 0
-                or self.pixel_y < 0):
+        source_pixel = self._canvas_to_source_pixel(canvas_x, canvas_y)
+        if source_pixel is None:
             return  # mouse cursor is in canvas, but it's not in image data
+
+        self.pixel_x, self.pixel_y = source_pixel
 
         # pixel offset logic
         self.pixel_offset = int((self.pixel_y - 1) * self.gui_params.img_width * bytes_per_pixel + self.pixel_x * bytes_per_pixel - bytes_per_pixel)
@@ -2007,3 +2027,382 @@ class ImageHeatGUI():
                     self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_INFO_PIXEL_OFFSET), "n/a"))
                 self.infobox_pixel_value_hex_label.set_html(self._get_html_for_infobox_label(
                     self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_INFO_PIXEL_VALUE), "n/a"))
+
+    ######################################################################################################
+    #                                        pixel probes                                                #
+    ######################################################################################################
+
+    def _get_decode_signature(self) -> tuple:
+        """Snapshot of every parameter that affects the decoded pixel data.
+
+        Post-processing parameters (zoom / flip / rotate / channels) are deliberately
+        excluded: changing them must keep probes alive, while any change here means the
+        underlying data was re-decoded (or a different file opened) and probes are stale.
+        """
+        p = self.gui_params
+        return (
+            p.img_file_path, p.img_start_offset, p.img_end_offset,
+            p.img_width, p.img_height,
+            p.pixel_format, p.endianess_type, p.swizzling_type, p.compression_type,
+            p.palette_format, p.palette_loadfrom_value, p.palette_file_path,
+            p.palette_offset, p.palette_scale_value, p.palette_endianess,
+            p.palette_ps2_swizzle_flag,
+        )
+
+    def _canvas_to_source_pixel(self, canvas_x: float, canvas_y: float) -> Optional[tuple]:
+        """Map a point in canvas coordinates back to a 1-based source pixel (x, y).
+
+        The forward render pipeline applies, in order: zoom -> vertical flip ->
+        horizontal flip -> rotate. This inverts it in the correct reverse order
+        (un-rotate, then un-flip, then un-zoom) so that a combined flip+rotate maps
+        back correctly. Returns None when the point falls outside the decoded image.
+        """
+        width = self.gui_params.img_width
+        height = self.gui_params.img_height
+        if not width or not height:
+            return None
+        zoom = self.preview_zoom_value or 1.0
+        rotate_id = get_rotate_id(self.gui_params.rotate_name)
+
+        x = int(math.ceil((canvas_x + 1) / zoom))
+        y = int(math.ceil((canvas_y + 1) / zoom))
+
+        # undo rotation first (it is applied last in the forward pipeline)
+        if rotate_id == "rotate_90_left":
+            x, y = width - y + 1, x
+        elif rotate_id == "rotate_90_right":
+            x, y = y, height - x + 1
+        elif rotate_id == "rotate_180":
+            x, y = width - x + 1, height - y + 1
+
+        # then undo the flips (applied before rotation, in source orientation)
+        if self.gui_params.horizontal_flip_flag:
+            x = width - x + 1
+        if self.gui_params.vertical_flip_flag:
+            y = height - y + 1
+
+        if x < 1 or y < 1 or x > width or y > height:
+            return None
+        return x, y
+
+    def _source_pixel_to_canvas(self, source_x: int, source_y: int) -> tuple:
+        """Map a 1-based source pixel to the canvas coordinates of its centre, applying
+        the same zoom/flip/rotate transforms used to render the preview. Exact inverse
+        of ``_canvas_to_source_pixel`` so a pinned probe redraws where it was clicked."""
+        width = self.gui_params.img_width
+        height = self.gui_params.img_height
+        zoom = self.preview_zoom_value or 1.0
+        rotate_id = get_rotate_id(self.gui_params.rotate_name)
+
+        x, y = source_x, source_y
+        if self.gui_params.vertical_flip_flag:
+            y = height - y + 1
+        if self.gui_params.horizontal_flip_flag:
+            x = width - x + 1
+
+        if rotate_id == "rotate_90_left":
+            disp_x, disp_y = y, width - x + 1
+        elif rotate_id == "rotate_90_right":
+            disp_x, disp_y = height - y + 1, x
+        elif rotate_id == "rotate_180":
+            disp_x, disp_y = width - x + 1, height - y + 1
+        else:
+            disp_x, disp_y = x, y
+
+        return (disp_x - 0.5) * zoom, (disp_y - 0.5) * zoom
+
+    def _redraw_pixel_probes(self) -> None:
+        """Redraw all probe markers on the canvas at their current transformed position."""
+        if self.preview_instance is None:
+            return
+        self.preview_instance.delete("pixel_probe")
+        if not self.gui_params.img_width or not self.gui_params.img_height:
+            return
+        marker = 5
+        for probe in self.pixel_probes:
+            cx, cy = self._source_pixel_to_canvas(probe["sx"], probe["sy"])
+            self.preview_instance.create_line(
+                cx - marker, cy, cx + marker, cy, fill="#FF0000", width=1, tags="pixel_probe")
+            self.preview_instance.create_line(
+                cx, cy - marker, cx, cy + marker, fill="#FF0000", width=1, tags="pixel_probe")
+            self.preview_instance.create_oval(
+                cx - marker, cy - marker, cx + marker, cy + marker,
+                outline="#FFFF00", width=1, tags="pixel_probe")
+            self.preview_instance.create_text(
+                cx + marker + 1, cy - marker - 1, text=str(probe["id"]),
+                fill="#FFFF00", anchor="nw", font=("Arial", 7), tags="pixel_probe")
+
+    def _sync_probes_with_decode(self) -> None:
+        """Drop probes whenever the decode inputs change (file switch or re-decode) so
+        stale pixel data from a previous image is never shown. Pure post-processing
+        changes keep the same signature, preserving probes for repositioning."""
+        current_signature = self._get_decode_signature()
+        if self._probes_decode_signature is None:
+            self._probes_decode_signature = current_signature
+            return
+        if current_signature != self._probes_decode_signature:
+            self._probes_decode_signature = current_signature
+            if self.pixel_probes:
+                self.pixel_probes = []
+                self._refresh_probe_window()
+
+    def clear_pixel_probes(self) -> None:
+        self.pixel_probes = []
+        if self.preview_instance is not None:
+            self.preview_instance.delete("pixel_probe")
+        self._refresh_probe_window()
+
+    def add_pixel_probe(self, event) -> None:
+        """Left-click handler: pin a probe at the clicked pixel (source coordinates)."""
+        if self.opened_image is None or not self.gui_params.pixel_format:
+            return
+        image_format: ImageFormats = ImageFormats[self.gui_params.pixel_format]
+        compression_id: str = get_compression_id(self.gui_params.compression_type)
+        if is_compressed_image_format(image_format) or compression_id != "none":
+            return  # per-pixel file offset/value is not meaningful for compressed data
+
+        canvas_x = self.preview_instance.canvasx(event.x)
+        canvas_y = self.preview_instance.canvasy(event.y)
+        source_pixel = self._canvas_to_source_pixel(canvas_x, canvas_y)
+        if source_pixel is None:
+            return
+        source_x, source_y = source_pixel
+
+        bpp: int = get_bpp_for_image_format(image_format)
+        bytes_per_pixel: float = convert_bpp_to_bytes_per_pixel_float(bpp)
+        pixel_offset: int = int(
+            (source_y - 1) * self.gui_params.img_width * bytes_per_pixel
+            + source_x * bytes_per_pixel - bytes_per_pixel)
+        pixel_offset_rgba: int = int(
+            (source_y - 1) * self.gui_params.img_width * 4 + source_x * 4 - 4)
+
+        if pixel_offset + bytes_per_pixel > (self.gui_params.img_end_offset - self.gui_params.img_start_offset):
+            return  # outside the decoded data range
+
+        rgba = self.opened_image.decoded_image_data[pixel_offset_rgba: pixel_offset_rgba + 4]
+        if len(rgba) < 4:
+            rgba = bytes(rgba) + bytes(4 - len(rgba))
+        r, g, b, a = rgba[0], rgba[1], rgba[2], rgba[3]
+
+        self._probe_id_counter += 1
+        probe = {
+            "id": self._probe_id_counter,
+            "sx": source_x,
+            "sy": source_y,
+            "offset": pixel_offset,
+            "file_offset": self.gui_params.img_start_offset + pixel_offset,
+            "r": r, "g": g, "b": b, "a": a,
+            "hex": f"{r:02X}{g:02X}{b:02X}{a:02X}",
+        }
+        # keep the signature current so this fresh probe is not immediately purged
+        self._probes_decode_signature = self._get_decode_signature()
+        self.pixel_probes.append(probe)
+        self._redraw_pixel_probes()
+        self._refresh_probe_window()
+
+    def _probe_row_values(self, probe: dict) -> tuple:
+        rgba_str = f"{probe['r']}, {probe['g']}, {probe['b']}, {probe['a']}"
+        return (
+            str(probe["id"]),
+            str(probe["sx"]),
+            str(probe["sy"]),
+            str(probe["offset"]),
+            str(probe["file_offset"]),
+            rgba_str,
+            probe["hex"],
+        )
+
+    def open_probe_window(self) -> None:
+        if self.probe_window is not None and self.probe_window.winfo_exists():
+            self.probe_window.deiconify()
+            self.probe_window.lift()
+            self.probe_window.focus_force()
+            self._refresh_probe_window()
+            return
+
+        self.probe_window = tk.Toplevel(self.master)
+        self.probe_window.title(self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_WINDOW_TITLE))
+        self.probe_window.geometry("580x320")
+        self.probe_window.protocol("WM_DELETE_WINDOW", self._on_probe_window_close)
+
+        self.probe_hint_label = tk.Label(
+            self.probe_window,
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_HINT),
+            anchor="w", font=self.gui_font)
+        self.probe_hint_label.pack(fill="x", padx=6, pady=(6, 0))
+
+        tree_frame = tk.Frame(self.probe_window)
+        tree_frame.pack(fill="both", expand=True, padx=6, pady=6)
+
+        columns = ("idx", "x", "y", "offset", "file_offset", "rgba", "hex")
+        self.probe_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
+        column_widths = {"idx": 40, "x": 60, "y": 60, "offset": 90, "file_offset": 90, "rgba": 120, "hex": 90}
+        for column in columns:
+            self.probe_tree.column(column, width=column_widths[column], anchor="center", stretch=False)
+        tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.probe_tree.yview)
+        self.probe_tree.configure(yscrollcommand=tree_scroll.set)
+        self.probe_tree.pack(side="left", fill="both", expand=True)
+        tree_scroll.pack(side="right", fill="y")
+
+        self.probe_count_label = tk.Label(self.probe_window, anchor="w", font=self.gui_font)
+        self.probe_count_label.pack(fill="x", padx=6)
+
+        button_frame = tk.Frame(self.probe_window)
+        button_frame.pack(fill="x", padx=6, pady=(0, 6))
+        self.probe_copy_button = tk.Button(
+            button_frame,
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_COPY_SELECTED),
+            command=lambda: self.copy_selected_probe())
+        self.probe_copy_button.pack(side="left")
+        self.probe_remove_button = tk.Button(
+            button_frame,
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_REMOVE_SELECTED),
+            command=lambda: self.remove_selected_probe())
+        self.probe_remove_button.pack(side="left", padx=(6, 0))
+        self.probe_export_button = tk.Button(
+            button_frame,
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_EXPORT_CSV),
+            command=lambda: self.export_probes_to_csv())
+        self.probe_export_button.pack(side="left", padx=(6, 0))
+        self.probe_clear_button = tk.Button(
+            button_frame,
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_CLEAR_ALL),
+            command=lambda: self.clear_pixel_probes())
+        self.probe_clear_button.pack(side="left", padx=(6, 0))
+
+        self._translate_probe_window()
+        self._refresh_probe_window()
+
+    def _on_probe_window_close(self) -> None:
+        if self.probe_window is not None:
+            self.probe_window.destroy()
+        self.probe_window = None
+        self.probe_tree = None
+        self.probe_count_label = None
+        self.probe_hint_label = None
+
+    def _translate_probe_window(self) -> None:
+        if self.probe_window is None or not self.probe_window.winfo_exists():
+            return
+        self.probe_window.title(self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_WINDOW_TITLE))
+        if self.probe_hint_label is not None:
+            self.probe_hint_label.config(
+                text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_HINT))
+        if self.probe_tree is not None:
+            self.probe_tree.heading("idx", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_INDEX))
+            self.probe_tree.heading("x", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_X))
+            self.probe_tree.heading("y", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_Y))
+            self.probe_tree.heading("offset", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_OFFSET))
+            self.probe_tree.heading("file_offset", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_FILE_OFFSET))
+            self.probe_tree.heading("rgba", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_RGBA))
+            self.probe_tree.heading("hex", text=self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_COL_HEX))
+        self.probe_copy_button.config(text=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_COPY_SELECTED))
+        self.probe_remove_button.config(text=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_REMOVE_SELECTED))
+        self.probe_export_button.config(text=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_EXPORT_CSV))
+        self.probe_clear_button.config(text=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_CLEAR_ALL))
+        self._refresh_probe_window()
+
+    def _refresh_probe_window(self) -> None:
+        if self.probe_window is None or not self.probe_window.winfo_exists():
+            return
+        if self.probe_tree is not None:
+            for item in self.probe_tree.get_children():
+                self.probe_tree.delete(item)
+            for probe in self.pixel_probes:
+                self.probe_tree.insert("", "end", iid=str(probe["id"]), values=self._probe_row_values(probe))
+        if self.probe_count_label is not None:
+            self.probe_count_label.config(
+                text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_PROBES_COUNT)
+                + str(len(self.pixel_probes)))
+
+    def _get_selected_probe(self) -> Optional[dict]:
+        if self.probe_tree is None:
+            return None
+        selection = self.probe_tree.selection()
+        if not selection:
+            return None
+        try:
+            selected_id = int(selection[0])
+        except ValueError:
+            return None
+        for probe in self.pixel_probes:
+            if probe["id"] == selected_id:
+                return probe
+        return None
+
+    def copy_selected_probe(self) -> None:
+        probe = self._get_selected_probe()
+        if probe is None:
+            messagebox.showinfo("Info", self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_NONE_SELECTED))
+            return
+        info = (
+            f"X={probe['sx']}, Y={probe['sy']}, "
+            f"Offset={probe['offset']}, File Offset={probe['file_offset']}, "
+            f"RGBA=({probe['r']}, {probe['g']}, {probe['b']}, {probe['a']}), "
+            f"Hex={probe['hex']}"
+        )
+        self.master.clipboard_clear()
+        self.master.clipboard_append(info)
+        messagebox.showinfo("Info", self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_COPIED))
+
+    def remove_selected_probe(self) -> None:
+        probe = self._get_selected_probe()
+        if probe is None:
+            messagebox.showinfo("Info", self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_NONE_SELECTED))
+            return
+        self.pixel_probes = [p for p in self.pixel_probes if p["id"] != probe["id"]]
+        self._redraw_pixel_probes()
+        self._refresh_probe_window()
+
+    def export_probes_to_csv(self) -> None:
+        if not self.pixel_probes:
+            messagebox.showinfo("Info", self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_PROBES_NONE_TO_EXPORT))
+            return
+        out_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            initialfile="pixel_probes",
+            initialdir=self.current_save_as_directory_path,
+            filetypes=(("CSV", "*.csv"),),
+        )
+        if not out_path:
+            return  # user closed the dialog on purpose
+        try:
+            selected_directory = os.path.dirname(out_path)
+            self.current_save_as_directory_path = selected_directory
+            self.user_config.set("config", ConfigKeys.SAVE_AS_DIRECTORY_PATH, selected_directory)
+            with open(self.user_config_file_path, "w") as configfile:
+                self.user_config.write(configfile)
+        except Exception:
+            pass
+        try:
+            with open(out_path, "w", newline="", encoding="utf-8") as csv_file:
+                writer = csv.writer(csv_file)
+                writer.writerow(["index", "x", "y", "offset", "file_offset", "r", "g", "b", "a", "hex"])
+                for probe in self.pixel_probes:
+                    writer.writerow([
+                        probe["id"], probe["sx"], probe["sy"], probe["offset"], probe["file_offset"],
+                        probe["r"], probe["g"], probe["b"], probe["a"], probe["hex"],
+                    ])
+        except Exception as error:
+            logger.error("Failed to export probes to CSV! Error: %s", error)
+            messagebox.showwarning("Warning", self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_POPUPS_FAILED_TO_SAVE_FILE))
+            return
+        logger.info(f"Probes exported successfully to {out_path}")
+        messagebox.showinfo("Info", self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_PROBES_CSV_SAVED))
