@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/GUI/offset_scanner.py''\\).read\\(\\)\\); print\\(''offset_scanner.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/GUI/offset_scanner_window.py''\\).read\\(\\)\\); print\\(''offset_scanner_window.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/GUI/gui_main.py''\\).read\\(\\)\\); print\\(''gui_main.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/Image/constants.py''\\).read\\(\\)\\); print\\(''constants.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/GUI/offset_scanner_window.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''offset_scanner_window.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/GUI/gui_main.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''gui_main.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''src/Image/constants.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''constants.py: OK''\\)\")",
+      "Bash(python:*)"
+    ]
+  }
+}

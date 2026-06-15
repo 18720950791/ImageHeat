@@ -39,6 +39,7 @@ from tkinterdnd2 import DND_FILES
 from src.GUI.about_window import AboutWindow
 from src.GUI.gui_params import GuiParams
 from src.GUI.gui_root import ImageHeatRoot
+from src.GUI.offset_scanner_window import OffsetScannerWindow
 from src.Image.constants import (
     COMPRESSION_TYPES_NAMES,
     DEFAULT_COMPRESSION_NAME,
@@ -1067,6 +1068,17 @@ class ImageHeatGUI():
         self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_OPTIONS),
                                  menu=self.optionsmenu)
 
+        # tools submenu
+        self.toolsmenu = tk.Menu(self.menubar, tearoff=0)
+        self.toolsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_SCAN_OFFSETS),
+            command=lambda: self.open_offset_scanner(),
+            accelerator="Ctrl+Shift+S",
+        )
+        master.bind_all("<Control-Shift-s>", lambda x: self.open_offset_scanner())
+        self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLS_MENU),
+                                 menu=self.toolsmenu)
+
         # help submenu
         self.helpmenu = tk.Menu(self.menubar, tearoff=0)
         self.helpmenu.add_command(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT),
@@ -1218,8 +1230,11 @@ class ImageHeatGUI():
         self.backgroundmenu.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_BACKGROUND_CHECKERBOARD))
         self.menubar.entryconfigure(2, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_OPTIONS))
 
+        self.toolsmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_SCAN_OFFSETS))
+        self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLS_MENU))
+
         self.helpmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT))
-        self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
+        self.menubar.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
 
         # save current language to config file
         self.user_config.set("config", ConfigKeys.CURRENT_PROGRAM_LANGUAGE, self.current_program_language.get())
@@ -1692,6 +1707,53 @@ class ImageHeatGUI():
     def show_about_window(self):
         if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
             AboutWindow(self)
+
+    def open_offset_scanner(self):
+        """Open the offset scanner dialog window."""
+        # guard: check if any Toplevel is already open
+        if any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
+            return
+
+        if not self.opened_image:
+            messagebox.showwarning(
+                "Warning",
+                self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_SCANNER_NO_FILE),
+            )
+            return
+
+        # sync current GUI params
+        self.get_gui_params_from_gui_elements()
+
+        OffsetScannerWindow(
+            master=self.master,
+            loaded_image_data=self.opened_image.loaded_image_data,
+            gui_params=self.gui_params,
+            total_file_size=self.gui_params.total_file_size,
+            apply_callback=self._apply_scanned_offset,
+            get_translation_text=self.get_translation_text,
+        )
+
+    def _apply_scanned_offset(self, offset: int):
+        """Apply a scanned offset to the main GUI and refresh the preview."""
+        self.current_start_offset.set(str(offset))
+
+        # calculate end offset based on current image dimensions and format
+        try:
+            image_format = ImageFormats[self.pixel_format_combobox.get()]
+            bpp = get_bpp_for_image_format(image_format)
+            bytes_per_pixel = convert_bpp_to_bytes_per_pixel(bpp)
+            width = self.get_spinbox_value(self.width_spinbox)
+            height = self.get_spinbox_value(self.height_spinbox)
+            data_size = width * height * bytes_per_pixel
+            end_offset = offset + data_size
+            if end_offset > self.gui_params.total_file_size:
+                end_offset = self.gui_params.total_file_size
+            self.current_end_offset.set(str(end_offset))
+        except Exception:
+            pass
+
+        self.gui_reload_image_on_gui_element_change()
+        self.parameters_box_disable_enable_logic()
 
     @staticmethod
     def set_text_in_box(in_box, in_text):
