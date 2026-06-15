@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l src/main.py src/GUI/*.py src/Image/*.py)",
+      "Bash(python -m py_compile src/GUI/offset_scanner_window.py src/GUI/gui_main.py src/Image/constants.py)"
+    ]
+  }
+}

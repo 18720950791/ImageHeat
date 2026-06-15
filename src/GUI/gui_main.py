@@ -39,6 +39,7 @@ from tkinterdnd2 import DND_FILES
 from src.GUI.about_window import AboutWindow
 from src.GUI.gui_params import GuiParams
 from src.GUI.gui_root import ImageHeatRoot
+from src.GUI.offset_scanner_window import OffsetScannerWindow
 from src.Image.constants import (
     COMPRESSION_TYPES_NAMES,
     DEFAULT_COMPRESSION_NAME,
@@ -100,6 +101,7 @@ class ImageHeatGUI():
         self.gui_font = ('Arial', 8)
         self.opened_image: Optional[HeatImage] = None
         self.gui_params: GuiParams = GuiParams()
+        self.offset_scanner_instance: Optional[OffsetScannerWindow] = None
         self.preview_instance = None
         self.ph_img = None
         self.preview_final_pil_image = None
@@ -1075,6 +1077,15 @@ class ImageHeatGUI():
         self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP),
                                  menu=self.helpmenu)
 
+        # tools submenu (added after Help so existing menubar indices stay valid)
+        self.toolsmenu = tk.Menu(self.menubar, tearoff=0)
+        self.toolsmenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLSMENU_OFFSET_SCANNER),
+            command=lambda: self.open_offset_scanner_window(), accelerator="Ctrl+F")
+        master.bind_all("<Control-f>", lambda x: self.open_offset_scanner_window())
+        self.menubar.add_cascade(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLSMENU_TOOLS),
+                                 menu=self.toolsmenu)
+
         master.config(menu=self.menubar)
 
         ######################################################################################################
@@ -1220,6 +1231,9 @@ class ImageHeatGUI():
 
         self.helpmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_ABOUT))
         self.menubar.entryconfigure(3, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_HELPMENU_HELP))
+
+        self.toolsmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLSMENU_OFFSET_SCANNER))
+        self.menubar.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_TOOLSMENU_TOOLS))
 
         # save current language to config file
         self.user_config.set("config", ConfigKeys.CURRENT_PROGRAM_LANGUAGE, self.current_program_language.get())
@@ -1692,6 +1706,14 @@ class ImageHeatGUI():
     def show_about_window(self):
         if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
             AboutWindow(self)
+
+    def open_offset_scanner_window(self):
+        # reuse the existing scanner window if it is already open
+        if self.offset_scanner_instance is not None and self.offset_scanner_instance.window_exists():
+            self.offset_scanner_instance.scanner_window.lift()
+            self.offset_scanner_instance.scanner_window.focus_force()
+            return
+        self.offset_scanner_instance = OffsetScannerWindow(self)
 
     @staticmethod
     def set_text_in_box(in_box, in_text):
