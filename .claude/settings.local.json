@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import json; json.load\\(open\\(''src/data/lang/ZH.json'', encoding=''utf-8''\\)\\); print\\(''ZH.json OK''\\)\")",
+      "Bash(python -m py_compile src/GUI/gui_main.py src/Image/constants.py)",
+      "Bash(python -m flake8 src/GUI/gui_main.py src/Image/constants.py)",
+      "Bash(python -c \"import src.GUI.gui_main; import src.Image.constants; print\\(''''import OK''''\\)\")",
+      "Bash(python _batch_smoke_test.py)",
+      "Bash(cd:*)"
+    ]
+  }
+}

@@ -3,6 +3,7 @@ Copyright © 2024-2025  Bartłomiej Duda
 License: GPL-3.0 License
 """
 
+import copy
 import json
 import math
 import os
@@ -1016,6 +1017,14 @@ class ImageHeatGUI():
         master.bind_all("<Control-d>", lambda x: self.export_raw_file())
         self.filemenu.entryconfig(2, state="disabled")
 
+        self.filemenu.add_command(
+            label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_BATCH_EXPORT),
+            command=lambda: self.batch_export_files(),
+            accelerator="Ctrl+B",
+        )
+        master.bind_all("<Control-b>", lambda x: self.batch_export_files())
+        self.filemenu.entryconfig(3, state="disabled")
+
         self.filemenu.add_separator()
         self.filemenu.add_command(label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT),
                                   command=lambda: self.quit_program(), accelerator="Ctrl+Q")
@@ -1200,7 +1209,9 @@ class ImageHeatGUI():
                                      label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_SAVE_AS))
         self.filemenu.entryconfigure(2, label=self.get_translation_text(
             TranslationKeys.TRANSLATION_TEXT_FILEMENU_SAVE_RAW_DATA))
-        self.filemenu.entryconfigure(4, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT))
+        self.filemenu.entryconfigure(3, label=self.get_translation_text(
+            TranslationKeys.TRANSLATION_TEXT_FILEMENU_BATCH_EXPORT))
+        self.filemenu.entryconfigure(5, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_QUIT))
         self.menubar.entryconfigure(1, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_FILEMENU_FILE))
 
         self.optionsmenu.entryconfigure(0, label=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_OPTIONSMENU_LANGUAGE))
@@ -1514,6 +1525,7 @@ class ImageHeatGUI():
         # menu bar logic
         self.filemenu.entryconfig(1, state="normal")
         self.filemenu.entryconfig(2, state="normal")
+        self.filemenu.entryconfig(3, state="normal")
 
         logger.info("Image has been opened successfully")
         return True
@@ -1553,6 +1565,53 @@ class ImageHeatGUI():
         self.gui_reload_image_on_gui_element_change()
         return True
 
+    def _build_export_image_bytes(self, heat_image: HeatImage, params: GuiParams, pillow_format: str) -> bytes:
+        """Build encoded image file bytes (PNG/BMP/DDS) from a decoded HeatImage.
+
+        Shared by single-file (File > Save As) and batch export. Applies the same
+        post-processing (flip/rotate) as the preview. Raises ValueError if the
+        decoded data is missing or too small for the requested dimensions.
+        """
+        orig_width = int(params.img_width)
+        orig_height = int(params.img_height)
+        raw_data = heat_image.decoded_image_data
+
+        if not raw_data:
+            raise ValueError("Decoded image data is empty")
+        expected_size: int = orig_width * orig_height * 4
+        if len(raw_data) < expected_size:
+            raise ValueError(f"Decoded data too small: got {len(raw_data)} bytes, need {expected_size}")
+
+        # create a new PIL image from raw data not scaling it (pack converted RGBA data)
+        export_pil_img = Image.frombuffer(
+            "RGBA",
+            (orig_width, orig_height),
+            raw_data,
+            "raw",
+            "RGBA",
+            0,
+            1,
+        )
+
+        # apply post-processing transformations
+        if params.vertical_flip_flag:
+            export_pil_img = export_pil_img.transpose(Transpose.FLIP_TOP_BOTTOM)
+        if params.horizontal_flip_flag:
+            export_pil_img = export_pil_img.transpose(Transpose.FLIP_LEFT_RIGHT)
+
+        rotate_id = get_rotate_id(params.rotate_name)
+        if rotate_id == "rotate_90_left":
+            export_pil_img = export_pil_img.transpose(Transpose.ROTATE_90)
+        elif rotate_id == "rotate_90_right":
+            export_pil_img = export_pil_img.transpose(Transpose.ROTATE_270)
+        elif rotate_id == "rotate_180":
+            export_pil_img = export_pil_img.transpose(Transpose.ROTATE_180)
+
+        out_data = PillowWrapper().get_pil_image_file_data_for_export2(export_pil_img, pillow_format=pillow_format)
+        if not out_data:
+            raise ValueError("Empty data to export")
+        return out_data
+
     # File > Save As
     def export_image_file(self) -> bool:
         if self.opened_image:
@@ -1586,62 +1645,27 @@ class ImageHeatGUI():
                 return False  # user closed file dialog on purpose
 
             try:
-                # generate full size image from raw data
-                orig_width = int(self.gui_params.img_width)
-                orig_height = int(self.gui_params.img_height)
-                raw_data = self.opened_image.decoded_image_data
-
-                # create a new PIL image from raw data not scaling it
-                # pack converted RGBA data
-                export_pil_img = Image.frombuffer(
-                        "RGBA",
-                        (orig_width, orig_height),
-                        raw_data,
-                        "raw",
-                        "RGBA",
-                        0,
-                        1,
-                )
-
-                # apply post-processing transformations
-                if self.gui_params.vertical_flip_flag:
-                    export_pil_img = export_pil_img.transpose(Transpose.FLIP_TOP_BOTTOM)
-                if self.gui_params.horizontal_flip_flag:
-                    export_pil_img = export_pil_img.transpose(Transpose.FLIP_LEFT_RIGHT)
-
-                rotate_id = get_rotate_id(self.gui_params.rotate_name)
-                if rotate_id == "rotate_90_left":
-                    export_pil_img = export_pil_img.transpose(Transpose.ROTATE_90)
-                elif rotate_id == "rotate_90_right":
-                    export_pil_img = export_pil_img.transpose(Transpose.ROTATE_270)
-                elif rotate_id == "rotate_180":
-                    export_pil_img = export_pil_img.transpose(Transpose.ROTATE_180)
-
-                # exporting
                 file_extension: str = get_file_extension_uppercase(out_file.name)
-                pillow_wrapper = PillowWrapper()
-
-                out_data = pillow_wrapper.get_pil_image_file_data_for_export2(
-                    export_pil_img, pillow_format=file_extension)
-
-                if not out_data:
-                    logger.error("Empty data to export!")
-                    messagebox.showwarning("Warning", self.get_translation_text(
-                        TranslationKeys.TRANSLATION_TEXT_POPUPS_EMPTY_IMAGE_DATA))
-                    return False
-
-                out_file.write(out_data)
-                out_file.close()
-                messagebox.showinfo("Info", self.get_translation_text(
-                    TranslationKeys.TRANSLATION_TEXT_POPUPS_FILE_SAVED_SUCCESSFULLY))
-                logger.info(f"Image has been exported successfully to {out_file.name}")
-
+                out_data = self._build_export_image_bytes(self.opened_image, self.gui_params, file_extension)
+            except ValueError as e:
+                logger.error(f"Empty data to export! {e}")
+                messagebox.showwarning("Warning", self.get_translation_text(
+                    TranslationKeys.TRANSLATION_TEXT_POPUPS_EMPTY_IMAGE_DATA))
+                if out_file:
+                    out_file.close()
+                return False
             except Exception as e:
                 logger.error(f"Failed to process image for export: {e}")
                 messagebox.showerror("Error", f"Failed to export image: {e}")
                 if out_file:
                     out_file.close()
                 return False
+
+            out_file.write(out_data)
+            out_file.close()
+            messagebox.showinfo("Info", self.get_translation_text(
+                TranslationKeys.TRANSLATION_TEXT_POPUPS_FILE_SAVED_SUCCESSFULLY))
+            logger.info(f"Image has been exported successfully to {out_file.name}")
 
         else:
             logger.info("Image is not opened yet...")
@@ -1688,6 +1712,300 @@ class ImageHeatGUI():
             logger.info("Image is not opened yet...")
 
         return True
+
+    # File > Batch Export
+    def batch_export_files(self) -> bool:
+        file_paths = filedialog.askopenfilenames(
+            initialdir=self.current_open_file_directory_path,
+            title=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_TITLE),
+        )
+        if not file_paths:
+            return False  # user closed the file dialog on purpose
+
+        # snapshot the currently selected decode parameters so later GUI changes
+        # cannot mutate them mid-batch
+        self.get_gui_params_from_gui_elements()
+        base_params: GuiParams = copy.copy(self.gui_params)
+        self._open_batch_export_dialog(list(file_paths), base_params)
+        return True
+
+    def _get_batch_default_dir(self) -> str:
+        try:
+            saved = self.user_config.get("config", ConfigKeys.BATCH_EXPORT_DIRECTORY_PATH)
+            if saved and os.path.isdir(saved):
+                return saved
+        except Exception:
+            pass
+        return self.current_save_as_directory_path
+
+    def _open_batch_export_dialog(self, file_paths: List[str], base_params: GuiParams) -> None:
+        window = tk.Toplevel(self.master)
+        window.title(self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_TITLE))
+        window.transient(self.master)
+        window.resizable(False, False)
+        try:
+            if platform.uname().system != "Linux":
+                window.iconbitmap(self.icon_path)
+        except tk.TclError:
+            pass
+
+        main_frame = ttk.Frame(window, padding=10)
+        main_frame.grid(row=0, column=0, sticky="nsew")
+
+        # output format
+        ttk.Label(main_frame, text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_FORMAT),
+                  font=self.gui_font).grid(row=0, column=0, sticky="w", pady=2)
+        format_combo = ttk.Combobox(main_frame, state="readonly", width=10,
+                                    values=["PNG", "BMP", "DDS"], font=self.gui_font)
+        format_combo.set("PNG")
+        format_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+
+        # output directory
+        default_dir = self._get_batch_default_dir()
+        dir_var = tk.StringVar(value=default_dir)
+        ttk.Label(main_frame, text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_OUTPUT_DIR),
+                  font=self.gui_font).grid(row=1, column=0, sticky="w", pady=2)
+        dir_entry = ttk.Entry(main_frame, textvariable=dir_var, width=45, state="readonly", font=self.gui_font)
+        dir_entry.grid(row=1, column=1, sticky="we", padx=5, pady=2)
+        browse_btn = ttk.Button(main_frame,
+                                text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_BROWSE))
+        browse_btn.grid(row=1, column=2, sticky="w", pady=2)
+
+        # filename template
+        template_var = tk.StringVar(value="{name}")
+        ttk.Label(main_frame, text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_FILENAME_TEMPLATE),
+                  font=self.gui_font).grid(row=2, column=0, sticky="w", pady=2)
+        template_entry = ttk.Entry(main_frame, textvariable=template_var, width=45, font=self.gui_font)
+        template_entry.grid(row=2, column=1, columnspan=2, sticky="we", padx=5, pady=2)
+        ttk.Label(main_frame, text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_TEMPLATE_HELP),
+                  font=self.gui_font, foreground="gray").grid(row=3, column=1, columnspan=2, sticky="w", padx=5)
+
+        # overall progress
+        progress_var = tk.IntVar(value=0)
+        progress = ttk.Progressbar(main_frame, orient="horizontal", mode="determinate",
+                                   maximum=max(len(file_paths), 1), variable=progress_var, length=400)
+        progress.grid(row=4, column=0, columnspan=3, sticky="we", pady=(10, 2))
+
+        # status label
+        status_var = tk.StringVar(
+            value=f"{self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_STATUS_IDLE)} "
+                  f"({len(file_paths)} "
+                  f"{self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_FILES_SELECTED)})")
+        ttk.Label(main_frame, textvariable=status_var, font=self.gui_font).grid(
+            row=5, column=0, columnspan=3, sticky="w", pady=2)
+
+        # per-file results log
+        log_frame = ttk.Frame(main_frame)
+        log_frame.grid(row=6, column=0, columnspan=3, sticky="nsew", pady=2)
+        log_scroll = ttk.Scrollbar(log_frame, orient="vertical")
+        log_text = tk.Text(log_frame, height=10, width=64, wrap="none", state="disabled",
+                           font=self.gui_font, yscrollcommand=log_scroll.set)
+        log_scroll.config(command=log_text.yview)
+        log_text.grid(row=0, column=0, sticky="nsew")
+        log_scroll.grid(row=0, column=1, sticky="ns")
+
+        # buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=7, column=0, columnspan=3, sticky="e", pady=(10, 0))
+        start_btn = ttk.Button(button_frame,
+                               text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_START))
+        start_btn.grid(row=0, column=0, padx=5)
+        close_btn = ttk.Button(button_frame,
+                               text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_CLOSE))
+        close_btn.grid(row=0, column=1, padx=5)
+
+        widgets: dict = {
+            "window": window, "format_combo": format_combo, "dir_var": dir_var, "dir_entry": dir_entry,
+            "browse_btn": browse_btn, "template_var": template_var, "template_entry": template_entry,
+            "progress_var": progress_var, "status_var": status_var, "log_text": log_text,
+            "start_btn": start_btn, "close_btn": close_btn, "running": False, "cancel_event": None,
+        }
+
+        def _browse():
+            chosen = filedialog.askdirectory(initialdir=dir_var.get() or default_dir)
+            if chosen:
+                dir_var.set(chosen)
+
+        def _request_cancel():
+            cancel_event = widgets.get("cancel_event")
+            if cancel_event is not None:
+                cancel_event.set()
+
+        def _start():
+            out_dir = dir_var.get().strip()
+            if not out_dir or not os.path.isdir(out_dir):
+                messagebox.showwarning("Warning", self.get_translation_text(
+                    TranslationKeys.TRANSLATION_TEXT_BATCH_NO_OUTPUT_DIR))
+                return
+
+            # persist output directory to config file
+            try:
+                self.user_config.set("config", ConfigKeys.BATCH_EXPORT_DIRECTORY_PATH, out_dir)
+                with open(self.user_config_file_path, "w") as configfile:
+                    self.user_config.write(configfile)
+            except Exception:
+                pass
+
+            pillow_format = format_combo.get()
+            template = template_var.get().strip() or "{name}"
+            cancel_event = threading.Event()
+            widgets["cancel_event"] = cancel_event
+            widgets["running"] = True
+
+            # lock inputs, reset progress, turn the Close button into Cancel
+            format_combo.config(state="disabled")
+            dir_entry.config(state="disabled")
+            browse_btn.config(state="disabled")
+            template_entry.config(state="disabled")
+            start_btn.config(state="disabled")
+            close_btn.config(text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_CANCEL),
+                             command=_request_cancel)
+            progress_var.set(0)
+            log_text.config(state="normal")
+            log_text.delete("1.0", tk.END)
+            log_text.config(state="disabled")
+
+            threading.Thread(
+                target=self._run_batch_export,
+                args=(list(file_paths), base_params, out_dir, pillow_format, template, widgets, cancel_event),
+                daemon=True,
+            ).start()
+
+        def _on_window_close():
+            if widgets.get("running"):
+                _request_cancel()  # let the worker stop gracefully between files
+            window.destroy()
+
+        browse_btn.config(command=_browse)
+        start_btn.config(command=_start)
+        close_btn.config(command=window.destroy)
+        window.protocol("WM_DELETE_WINDOW", _on_window_close)
+
+    def _run_batch_export(self, file_paths: List[str], base_params: GuiParams, out_dir: str,
+                          pillow_format: str, template: str, widgets: dict, cancel_event) -> None:
+        """Background worker: decode + export every file with the snapshot params.
+
+        Runs off the Tk main thread; all UI updates are marshalled back via
+        ``self.master.after``. A failure on one file is logged and skipped so a
+        single corrupt input never aborts the whole batch.
+        """
+        ext: str = "." + pillow_format.lower()
+        total: int = len(file_paths)
+        ok_count: int = 0
+        fail_count: int = 0
+        used_names: set = set()
+        cancelled: bool = False
+
+        for index, src_path in enumerate(file_paths, start=1):
+            if cancel_event.is_set():
+                cancelled = True
+                break
+
+            file_name: str = os.path.basename(src_path)
+            try:
+                params: GuiParams = copy.copy(base_params)
+                params.img_file_path = src_path
+                params.img_file_name = file_name
+                params.total_file_size = os.path.getsize(src_path)
+                params.img_start_offset = min(base_params.img_start_offset or 0, params.total_file_size)
+                if not base_params.img_end_offset or base_params.img_end_offset > params.total_file_size:
+                    params.img_end_offset = params.total_file_size
+                else:
+                    params.img_end_offset = base_params.img_end_offset
+
+                heat_image = self._decode_single_file(params)
+                out_data = self._build_export_image_bytes(heat_image, params, pillow_format)
+
+                out_path = self._resolve_batch_output_name(out_dir, template, file_name, index, ext, used_names)
+                with open(out_path, "wb") as out_file:
+                    out_file.write(out_data)
+                used_names.add(os.path.normcase(out_path))
+                ok_count += 1
+                logger.info(f"[BATCH] Exported {file_name} -> {out_path}")
+                self.master.after(0, self._batch_update_progress, widgets, index, total,
+                                  file_name, True, os.path.basename(out_path))
+            except Exception as error:
+                fail_count += 1
+                logger.error(f"[BATCH] Failed to export {file_name}: {error}")
+                self.master.after(0, self._batch_update_progress, widgets, index, total,
+                                  file_name, False, str(error))
+
+        self.master.after(0, self._batch_on_finish, widgets, ok_count, fail_count, cancelled)
+
+    def _decode_single_file(self, params: GuiParams) -> HeatImage:
+        heat_image = HeatImage(params)
+        heat_image.image_reload()  # first reload reads the whole file and decodes from offset 0
+        # honor non-default offsets by re-decoding the [start:end] slice (matches the GUI preview)
+        if params.img_start_offset or params.img_end_offset < params.total_file_size:
+            heat_image.image_reload()
+        if heat_image.is_preview_error or not heat_image.decoded_image_data:
+            raise ValueError("Unsupported pixel format or decode failed")
+        return heat_image
+
+    def _resolve_batch_output_name(self, out_dir: str, template: str, file_name: str,
+                                   index: int, ext: str, used_names: set) -> str:
+        stem: str = os.path.splitext(file_name)[0]
+        base: str = template.replace("{name}", stem).replace("{n}", f"{index:03d}")
+        if not base:
+            base = stem or f"image_{index:03d}"
+        candidate: str = os.path.join(out_dir, base + ext)
+        counter: int = 1
+        # avoid overwriting existing files and names produced earlier in this run
+        while os.path.normcase(candidate) in used_names or os.path.exists(candidate):
+            candidate = os.path.join(out_dir, f"{base}_{counter}{ext}")
+            counter += 1
+        return candidate
+
+    def _batch_update_progress(self, widgets: dict, index: int, total: int,
+                               file_name: str, ok: bool, message: str) -> None:
+        try:
+            if not widgets["window"].winfo_exists():
+                return
+        except Exception:
+            return
+        widgets["progress_var"].set(index)
+        running_text = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_STATUS_RUNNING)
+        widgets["status_var"].set(f"{running_text} {index} / {total}")
+
+        if ok:
+            tag = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_RESULT_OK)
+            line = f"[{tag}] {file_name} -> {message}\n"
+        else:
+            tag = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_RESULT_FAIL)
+            line = f"[{tag}] {file_name}: {message}\n"
+
+        log_text = widgets["log_text"]
+        log_text.config(state="normal")
+        log_text.insert(tk.END, line)
+        log_text.see(tk.END)
+        log_text.config(state="disabled")
+
+    def _batch_on_finish(self, widgets: dict, ok_count: int, fail_count: int, cancelled: bool) -> None:
+        try:
+            if not widgets["window"].winfo_exists():
+                return
+        except Exception:
+            return
+        widgets["running"] = False
+
+        if cancelled:
+            status_key = TranslationKeys.TRANSLATION_TEXT_BATCH_STATUS_CANCELLED
+        else:
+            status_key = TranslationKeys.TRANSLATION_TEXT_BATCH_STATUS_DONE
+        ok_label = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_RESULT_OK)
+        fail_label = self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_RESULT_FAIL)
+        widgets["status_var"].set(
+            f"{self.get_translation_text(status_key)}: {ok_count} {ok_label}, {fail_count} {fail_label}")
+
+        # re-enable inputs and restore the Close button
+        widgets["format_combo"].config(state="readonly")
+        widgets["dir_entry"].config(state="readonly")
+        widgets["browse_btn"].config(state="normal")
+        widgets["template_entry"].config(state="normal")
+        widgets["start_btn"].config(state="normal")
+        widgets["close_btn"].config(
+            text=self.get_translation_text(TranslationKeys.TRANSLATION_TEXT_BATCH_CLOSE),
+            command=widgets["window"].destroy)
 
     def show_about_window(self):
         if not any(isinstance(x, tk.Toplevel) for x in self.master.winfo_children()):
